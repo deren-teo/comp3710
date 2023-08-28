@@ -1,5 +1,5 @@
 # Command to pip install stable PyTorch build for Linux w/ CUDA 11.8 support
-# pip3 install torch --index-url https://download.pytorch.org/whl/cu118
+# pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu118
 
 matplotlib
 numpy
