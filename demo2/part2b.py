@@ -23,7 +23,7 @@ if not torch.cuda.is_available():
 transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (1.0,))])
 
 trainset = torchvision.datasets.CIFAR10(
-    root=Path("home", "torchvision_data"),
+    root=Path(Path.home(), "torchvision_data"),
     train=True,
     transform=transform,
     download=True
@@ -32,12 +32,12 @@ train_loader = torch.utils.data.DataLoader(trainset, batch_size=256, shuffle=Tru
 total_step = len(train_loader)
 
 testset = torchvision.datasets.CIFAR10(
-    root=Path("home", "torchvision_data"),
+    root=Path(Path.home(), "torchvision_data"),
     train=False,
     transform=transform,
     download=True
 )
-test_loader = torch.utils.data.DataLoader(testset, batchsize=100, shuffle=False)
+test_loader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False)
 
 #--------------
 # Model
@@ -55,7 +55,7 @@ class Model(nn.Module):
     def forward(self, x):
         return self.layers(x)
 
-    def _make_layers(self, in_channels):
+    def _make_layers(self, in_channels, out_channels):
         layers = [
             ...
         ]
