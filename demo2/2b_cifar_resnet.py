@@ -1,7 +1,7 @@
 """
 Part 2b: CNNs
 
-Fast CIFAR10 classifier using a custom ResNet model. Achieves >93% accuracy
+Fast CIFAR10 classifier using a custom ResNet-9 model. Achieves >93% accuracy
 with less than 360 seconds of training on a single Nvidia V100 GPU.
 
 References:
@@ -9,6 +9,9 @@ References:
     https://github.dev/apple/ml-cifar-10-faster/
     K. He, X. Zhang, S. Ren and J. Sun, “Deep Residual Learning for Image Recognition,” in CVPR, 2016.
 """
+import argparse
+import time
+
 from pathlib import Path
 
 import torch
@@ -16,9 +19,24 @@ import torch.nn as nn
 import torchvision
 import torchvision.transforms as transforms
 
-from tqdm import tqdm
-
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+#--------------
+# Argument parsing
+parser = argparse.ArgumentParser()
+parser.add_argument("--epochs", type=int, default=16)
+parser.add_argument("--tqdm", action="store_true")
+args = parser.parse_args()
+
+if args.tqdm:
+    from tqdm import tqdm
+    wrapiter = lambda iter: tqdm(iter)
+else:
+    wrapiter = lambda iter: iter
+
+#--------------
+# Utils
+strftime = lambda t: f"{int(t//3600):02}:{int((t%3600)//60):02}:{(t%3600)%60:.5f}"
 
 #--------------
 # Data
@@ -110,11 +128,11 @@ optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
 #--------------
 # Train the model
-NUM_EPOCHS = 16
-
+print(f"Training model for {args.epochs} epochs...")
 model.train()
-for epoch in range(NUM_EPOCHS):
-    for i, (images, labels) in tqdm(enumerate(train_loader)):
+time_start = time.time()
+for epoch in range(args.epochs):
+    for i, (images, labels) in enumerate(wrapiter(train_loader)):
         images = images.to(device)
         labels = labels.to(device)
 
@@ -128,15 +146,18 @@ for epoch in range(NUM_EPOCHS):
         optimizer.step()
 
     # Training report
-    print(f"Epoch [{epoch+1}/{NUM_EPOCHS}]\tLoss: {loss.item():.5f}")
+    time_elapsed = time.time() - time_start
+    print(f"Epoch [{epoch+1:02}/{args.epochs:02}] Loss: {loss.item():.5f} ({strftime(time_elapsed)})")
 
 #--------------
 # Test the model
+print("Evaluating model on test set...")
 model.eval()
+time_start = time.time()
 with torch.no_grad():
     total = 0
     correct = 0
-    for images, labels in tqdm(test_loader):
+    for images, labels in wrapiter(test_loader):
         images = images.to(device)
         labels = labels.to(device)
 
@@ -146,4 +167,5 @@ with torch.no_grad():
         total += labels.size(0)
         correct += (predicted == labels).sum().item()
 
-    print(f"Test accuracy: {100*correct/total:.2f}%")
+    time_elapsed = time.time() - time_start
+    print(f"Test accuracy: {100*correct/total:.2f}% ({strftime(time_elapsed)})")

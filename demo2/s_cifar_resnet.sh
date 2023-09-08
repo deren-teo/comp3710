@@ -12,4 +12,4 @@
 #SBATCH --gres=gpu:1
 
 conda activate torch
-python ./part2b.py
+python ./2b_cifar_resnet.py
