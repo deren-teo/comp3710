@@ -5,8 +5,8 @@
 #SBATCH --tasks=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task 1
-#SBATCH --mail-type=All
-#SBATCH --mail-user=my_email_address
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=s4528554@student.uq.edu.au
 #SBATCH --output=slurm-%j.out
 #SBATCH --error=slurm-%j.err
 #SBATCH --gres=gpu:1
