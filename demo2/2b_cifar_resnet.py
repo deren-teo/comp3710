@@ -4,10 +4,13 @@ Part 2b: CNNs
 Fast CIFAR10 classifier using a custom ResNet-9 model. Achieves >93% accuracy
 with less than 360 seconds of training on a single Nvidia V100 GPU.
 
+Script structure is based on "classify/test_classify_mnist.py" [1].
+Custom ResNet architecture is based on [2].
+
 References:
-    https://github.com/shakes76/pattern-analysis-2023/blob/experimental/classify/test_classify_mnist.py
-    https://github.dev/apple/ml-cifar-10-faster/
-    K. He, X. Zhang, S. Ren and J. Sun, “Deep Residual Learning for Image Recognition,” in CVPR, 2016.
+[1] S. S. Chandra. "shakes76/pattern-analysis-2023." GitHub.com. https://github.com/shakes76/pattern-analysis-2023/blob/experimental (accessed Sep. 9, 2023).
+[2] S. A. Serrano, H. P. Ansari, V. Gupta, and D. DeCoste. "apple/ml-cifar-10-faster." GitHub.com. https://github.com/apple/ml-cifar-10-faster (accessed Sep. 9, 2023).
+
 """
 import argparse
 import time
@@ -18,6 +21,8 @@ import torch
 import torch.nn as nn
 import torchvision
 import torchvision.transforms as transforms
+
+from torch.cuda.amp.grad_scaler import GradScaler
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -36,11 +41,14 @@ else:
 
 #--------------
 # Utils
-strftime = lambda t: f"{int(t//3600):02}:{int((t%3600)//60):02}:{(t%3600)%60:.5f}"
+strftime = lambda t: f"{int(t//3600):02}:{int((t%3600)//60):02}:{(t%3600)%60:08.5f}"
 
 #--------------
 # Data
-transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (1.0,))])
+transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.5,), (1.0,)),
+])
 
 trainset = torchvision.datasets.CIFAR10(
     root=Path(Path.home(), "torchvision_data"),
@@ -49,13 +57,12 @@ trainset = torchvision.datasets.CIFAR10(
     download=True
 )
 train_loader = torch.utils.data.DataLoader(trainset, batch_size=256, shuffle=True)
-total_step = len(train_loader)
 
 testset = torchvision.datasets.CIFAR10(
     root=Path(Path.home(), "torchvision_data"),
     train=False,
     transform=transform,
-    download=True
+    download=False
 )
 test_loader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False)
 
@@ -66,7 +73,7 @@ def conv_block(c_in, c_out):
     return nn.Sequential(
         nn.Conv2d(in_channels=c_in, out_channels=c_out, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False),
         nn.BatchNorm2d(c_out),
-        nn.ReLU(inplace=False)
+        nn.ReLU()
     )
 
 def conv_pool_block(c_in, c_out):
@@ -74,7 +81,7 @@ def conv_pool_block(c_in, c_out):
         nn.Conv2d(in_channels=c_in, out_channels=c_out, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False),
         nn.MaxPool2d(kernel_size=2),
         nn.BatchNorm2d(c_out),
-        nn.ReLU(inplace=False)
+        nn.ReLU()
     )
 
 class Flatten(nn.Module):
@@ -115,7 +122,8 @@ class ResNet9(nn.Module):
             Residual(512),
             nn.MaxPool2d(kernel_size=4),
             Flatten(),
-            nn.Linear(512, out_channels, bias=False)
+            nn.Linear(512, out_channels, bias=False),
+            nn.LogSoftmax(dim=1)
         ]
         return nn.Sequential(*layers)
 
@@ -128,30 +136,32 @@ optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
 #--------------
 # Train the model
-print(f"Training model for {args.epochs} epochs...")
+print(f"\nTraining model for {args.epochs} epochs...")
 model.train()
+scaler = GradScaler()
 time_start = time.time()
 for epoch in range(args.epochs):
     for i, (images, labels) in enumerate(wrapiter(train_loader)):
         images = images.to(device)
         labels = labels.to(device)
-
-        # Forward pass
-        outputs = model(images)
-        loss = criterion(outputs, labels)
-
-        # Backward and optimize
         optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        # Forward pass
+        with torch.autocast(device_type="cuda", dtype=torch.float16):
+            outputs = model(images)
+            loss = criterion(outputs, labels)
+        # Backward and optimize
+        scaler.scale(loss).backward()
+        scaler.unscale_(optimizer)
+        scaler.step(optimizer)
+        scaler.update()
 
     # Training report
     time_elapsed = time.time() - time_start
-    print(f"Epoch [{epoch+1:02}/{args.epochs:02}] Loss: {loss.item():.5f} ({strftime(time_elapsed)})")
+    print(f"Epoch [{epoch+1:02}/{args.epochs:02}]  Loss: {loss.item():.5f}  ({strftime(time_elapsed)})")
 
 #--------------
 # Test the model
-print("Evaluating model on test set...")
+print("\nEvaluating model on test set...")
 model.eval()
 time_start = time.time()
 with torch.no_grad():
