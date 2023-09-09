@@ -9,5 +9,4 @@
 #SBATCH --error=slurm-%j.err
 #SBATCH --gres=gpu:1
 
-conda activate torch
 python ./2b_cifar_resnet.py --epochs=16
