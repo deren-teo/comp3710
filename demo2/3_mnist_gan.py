@@ -152,8 +152,12 @@ time_start = time.time()
 losses_G = []
 losses_D = []
 
+# A fixed noise vector used for generating image samples after each epoch
+sample_vector = torch.randn(64, 100, 1, 1, device=device)
+sample_images = []
+
 for epoch in range(args.epochs):
-    for i, (real_images, _) in enumerate(data_loader):
+    for i, (real_images, _) in enumerate(wrapiter(data_loader)):
         ### UPDATE DISCRIMINATOR
         # Train on real data
         real_images = real_images.to(device)
@@ -187,21 +191,21 @@ for epoch in range(args.epochs):
         losses_G.append(lossG.item())
         losses_D.append(lossD.item())
 
+    # Generate sample images from a constant noise vector to view progress
+    with torch.no_grad():
+        sample_images.append(generator(sample_vector).detach().cpu())
+
     # Training report
     time_elapsed = time.time() - time_start
     print(f"Epoch [{epoch+1:02}/{args.epochs:02}]  Loss_D: {lossD.item():.5f}  Loss_G: {lossG.item():.5f}  ({strftime(time_elapsed)})")
 
 #--------------
-# Export training data
+# Export training data and sample images
 
-export_array = np.vstack([losses_G, losses_D])
+print("\nExporting training losses and sample images...")
+
 timestamp = int(time.time())
-np.save(f"gan_train_{args.epochs}epochs_{timestamp}.out", export_array)
-
-#--------------
-# Test the model
-
-print("\nEvaluating model by generating images...")
-with torch.no_grad():
-    fake_images = generator(torch.randn(64, 100, 1, 1, device=device)).detach().cpu()
-np.save(f"gan_sample_{timestamp}.out", fake_images)
+training_losses = np.transpose(np.stack([losses_G, losses_D], axis=-1), (1, 0))
+sample_images = np.transpose(np.stack(sample_images, axis=-1), (4, 0, 1, 2, 3))
+np.save(f"gan_training_{args.epochs}epochs_{timestamp}", training_losses)
+np.save(f"gan_imsample_{args.epochs}epochs_{timestamp}", sample_images)

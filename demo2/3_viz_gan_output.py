@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 
+from matplotlib.animation import ArtistAnimation
+
 import torch
 import torchvision
 
@@ -20,12 +22,16 @@ def visualise_training(filename):
     ax.set_ylabel("Loss")
     plt.show()
 
-def visualise_sample(filename):
-    fake_images = torch.tensor(np.load(filename))
-    images_grid = torchvision.utils.make_grid(fake_images, padding=2, normalize=True)
-
+def visualise_imsample(filename):
+    sample_images = np.load(filename)
+    sample_grids = [
+        torchvision.utils.make_grid(
+            torch.tensor(im), padding=2, normalize=True) for im in sample_images
+    ]
+    fig, ax = plt.subplots()
     plt.axis("off")
-    plt.imshow(np.transpose(images_grid, (1, 2, 0)))
+    ims = [[ax.imshow(np.transpose(grid, (1, 2, 0)), animated=True)] for grid in sample_grids]
+    ani = ArtistAnimation(fig, ims, interval=1000, blit=True, repeat_delay=1000)
     plt.show()
 
 def main():
@@ -34,9 +40,9 @@ def main():
     args = parser.parse_args()
 
     for filename in args.filenames:
-        if "gan_sample_" in filename:
-            visualise_sample(filename)
-        elif "gan_train_" in filename:
+        if "gan_imsample_" in filename:
+            visualise_imsample(filename)
+        elif "gan_training_" in filename:
             visualise_training(filename)
         else:
             raise RuntimeError("file type can't be identified from filename")
