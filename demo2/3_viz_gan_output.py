@@ -11,7 +11,7 @@ from matplotlib.animation import ArtistAnimation, FFMpegWriter
 import torch
 import torchvision
 
-# Set path to ffmpeg to export MP4 video format
+# Set path to ffmpeg to export MP4 video format (only necessary for Windows)
 if platform.system() == "Windows":
     mpl.rcParams["animation.ffmpeg_path"] = r"C:\\ffmpeg\\bin\\ffmpeg.exe"
 
@@ -42,14 +42,11 @@ def visualise_imsample(filename, save=False):
     ims = [[ax.imshow(np.transpose(grid, (1, 2, 0)), animated=True)] for grid in sample_grids]
     ani = ArtistAnimation(fig, ims, interval=1000, blit=True, repeat_delay=1000)
     if save:
-        if platform.system() == "Windows":
-            if filename.startswith(".\\"):
-                filename = filename[2:]
-            fname = filename.split(".")[0] + ".mp4"
-            mp4_writer = FFMpegWriter(fps=1)
-            ani.save(fname, writer=mp4_writer)
-        else:
-            raise UserWarning("saving video currently only available on Windows")
+        if filename.startswith(".\\"):
+            filename = filename[2:]
+        fname = filename.split(".")[0] + ".mp4"
+        mp4_writer = FFMpegWriter(fps=1)
+        ani.save(fname, writer=mp4_writer)
     plt.show()
 
 def main():
