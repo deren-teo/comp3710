@@ -1,8 +1,8 @@
 """
 Part 2b: CNNs
 
-Fast CIFAR10 classifier using a custom ResNet-9 model. Achieves >93% accuracy
-with less than 360 seconds of training on a single Nvidia V100 GPU.
+Fast CIFAR10 classifier using a custom ResNet-9 model. Achieves >90% accuracy
+with less than 360 seconds of training on a single Nvidia A100 GPU.
 
 Script structure is based on "classify/test_classify_mnist.py" [1].
 Custom ResNet architecture is based on [2].
@@ -22,12 +22,11 @@ import torch.nn as nn
 import torchvision
 import torchvision.transforms as transforms
 
-from torch.cuda.amp.grad_scaler import GradScaler
-
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 #--------------
 # Argument parsing
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--epochs", type=int, default=16)
 parser.add_argument("--tqdm", action="store_true")
@@ -41,13 +40,22 @@ else:
 
 #--------------
 # Utils
+
 strftime = lambda t: f"{int(t//3600):02}:{int((t%3600)//60):02}:{(t%3600)%60:08.5f}"
 
 #--------------
 # Data
+
+CIFAR10_MEAN, CIFAR10_STD = [
+    (0.4914, 0.4822, 0.4465),
+    (0.2023, 0.1994, 0.2010),
+]
+
 transform = transforms.Compose([
     transforms.ToTensor(),
-    transforms.Normalize((0.5,), (1.0,)),
+    transforms.Normalize(CIFAR10_MEAN, CIFAR10_STD),
+    transforms.RandomHorizontalFlip(),
+    transforms.RandomCrop(32, padding=4, padding_mode="reflect")
 ])
 
 trainset = torchvision.datasets.CIFAR10(
@@ -73,7 +81,7 @@ def conv_block(c_in, c_out):
     return nn.Sequential(
         nn.Conv2d(in_channels=c_in, out_channels=c_out, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False),
         nn.BatchNorm2d(c_out),
-        nn.ReLU()
+        nn.GELU()
     )
 
 def conv_pool_block(c_in, c_out):
@@ -81,7 +89,7 @@ def conv_pool_block(c_in, c_out):
         nn.Conv2d(in_channels=c_in, out_channels=c_out, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False),
         nn.MaxPool2d(kernel_size=2),
         nn.BatchNorm2d(c_out),
-        nn.ReLU()
+        nn.GELU()
     )
 
 class Flatten(nn.Module):
@@ -92,13 +100,18 @@ class Residual(nn.Module):
     def __init__(self, channels):
         super(Residual, self).__init__()
         self.conv1 = conv_block(channels, channels)
-        self.conv2 = conv_block(channels, channels)
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False),
+            nn.BatchNorm2d(channels),
+        )
+        self.act = nn.GELU()
 
     def forward(self, x):
         residual = x
         out = self.conv1(x)
         out = self.conv2(x)
         out = out + residual
+        out = self.act(out)
         return out
 
 class ResNet9(nn.Module):
@@ -117,7 +130,6 @@ class ResNet9(nn.Module):
             conv_pool_block(64, 128),
             Residual(128),
             conv_pool_block(128, 256),
-            Residual(256),
             conv_pool_block(256, 512),
             Residual(512),
             nn.MaxPool2d(kernel_size=4),
@@ -132,13 +144,14 @@ model = ResNet9(in_channels=3, num_classes=10)
 model = model.to(device)
 
 criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
+scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.1, steps_per_epoch=len(train_loader), epochs=args.epochs)
 
 #--------------
 # Train the model
+
 print(f"\nTraining model for {args.epochs} epochs...")
 model.train()
-scaler = GradScaler()
 time_start = time.time()
 for epoch in range(args.epochs):
     for i, (images, labels) in enumerate(wrapiter(train_loader)):
@@ -146,14 +159,12 @@ for epoch in range(args.epochs):
         labels = labels.to(device)
         optimizer.zero_grad()
         # Forward pass
-        with torch.autocast(device_type="cuda", dtype=torch.float16):
-            outputs = model(images)
-            loss = criterion(outputs, labels)
+        outputs = model(images)
+        loss = criterion(outputs, labels)
         # Backward and optimize
-        scaler.scale(loss).backward()
-        scaler.unscale_(optimizer)
-        scaler.step(optimizer)
-        scaler.update()
+        loss.backward()
+        optimizer.step()
+        scheduler.step()
 
     # Training report
     time_elapsed = time.time() - time_start
@@ -161,6 +172,7 @@ for epoch in range(args.epochs):
 
 #--------------
 # Test the model
+
 print("\nEvaluating model on test set...")
 model.eval()
 time_start = time.time()
