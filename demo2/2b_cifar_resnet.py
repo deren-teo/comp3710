@@ -143,9 +143,9 @@ class ResNet9(nn.Module):
 model = ResNet9(in_channels=3, num_classes=10)
 model = model.to(device)
 
-criterion = nn.CrossEntropyLoss()
+criterion = nn.CrossEntropyLoss(label_smoothing=0.2)
 optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
-scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.1, steps_per_epoch=len(train_loader), epochs=args.epochs)
+scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.1, epochs=args.epochs, steps_per_epoch=len(train_loader))
 
 #--------------
 # Train the model
