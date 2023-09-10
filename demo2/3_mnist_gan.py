@@ -205,7 +205,7 @@ for epoch in range(args.epochs):
 print("\nExporting training losses and sample images...")
 
 timestamp = int(time.time())
-training_losses = np.transpose(np.stack([losses_G, losses_D], axis=-1), (1, 0))
+training_losses = np.vstack([losses_G, losses_D])
 sample_images = np.transpose(np.stack(sample_images, axis=-1), (4, 0, 1, 2, 3))
 np.save(f"gan_training_{args.epochs}epochs_{timestamp}", training_losses)
 np.save(f"gan_imsample_{args.epochs}epochs_{timestamp}", sample_images)

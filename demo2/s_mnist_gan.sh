@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=s4528554-mnist-gan
+#SBATCH --job-name=mnist-gan
 #SBATCH --partition=vgpu
 #SBATCH --nodes=1
 #SBATCH --tasks=1

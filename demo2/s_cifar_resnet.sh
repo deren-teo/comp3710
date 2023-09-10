@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=s4528554-resnet-cifar
+#SBATCH --job-name=cifar-resnet
 #SBATCH --partition=vgpu
 #SBATCH --nodes=1
 #SBATCH --tasks=1
