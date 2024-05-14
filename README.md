@@ -1,6 +1,6 @@
 # comp3710
 
-Repository tracking source code for [COMP3710: Pattern Recognition and Analysis](https://my.uq.edu.au/programs-courses/course.html?course_code=comp3710) coursework.
+COMP3710: Pattern Recognition and Analysis (Coursework)
 
 ## Demo 1: Fractals
 
